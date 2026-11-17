@@ -56,15 +56,16 @@ final class Store: ObservableObject {
             }
             guard let data = text.data(using: .utf8) else { throw ApiError.badData }
             let parsed = try Self.parseSites(data)
+            let st = Self.parseStats(data)
             guard !parsed.isEmpty else {
-                status = "配置里没有可用的采集站"
+                status = "这份配置里没有采集站：共 \(st.total) 个站点，其中爬虫源 \(st.spider) 个、采集站 0 个。爬虫源（type=3 / csp_ 开头）需要 Java 虚拟机跑 jar，iOS 上不支持，请换一份带苹果CMS采集站（type=1，api 含 api.php）的配置。"
                 return
             }
             sites = parsed
             configSource = trimmed
             ud.set(try? JSONEncoder().encode(parsed), forKey: kConfig)
             ud.set(trimmed, forKey: kSource)
-            status = "已加载 \(parsed.count) 个采集站"
+            status = "已加载 \(parsed.count) 个采集站" + (st.spider > 0 ? "（忽略 \(st.spider) 个爬虫源）" : "")
         } catch {
             let msg = (error as? LocalizedError)?.errorDescription ?? error.localizedDescription
             status = "配置失败：" + msg
@@ -95,6 +96,24 @@ final class Store: ObservableObject {
             out.append(Site(key: key, name: name, type: type, api: api, searchable: searchable))
         }
         return out
+    }
+
+
+    /// 统计配置里各类站点数量，用于给用户明确提示
+    nonisolated static func parseStats(_ data: Data) -> (total: Int, mac: Int, spider: Int, other: Int) {
+        guard let obj = try? JSONSerialization.jsonObject(with: data) else { return (0, 0, 0, 0) }
+        var raw: [[String: Any]] = []
+        if let dict = obj as? [String: Any], let arr = dict["sites"] as? [[String: Any]] { raw = arr }
+        else if let arr = obj as? [[String: Any]] { raw = arr }
+        var mac = 0, spider = 0, other = 0
+        for d in raw {
+            let type = (d["type"] as? Int) ?? Int((d["type"] as? String) ?? "0") ?? 0
+            let api = (d["api"] as? String) ?? ""
+            if type == 1 && (api.contains("api.php")) { mac += 1 }
+            else if type == 3 || api.hasPrefix("csp_") || api.hasPrefix("js_") { spider += 1 }
+            else { other += 1 }
+        }
+        return (raw.count, mac, spider, other)
     }
 
     // MARK: 收藏 / 历史
