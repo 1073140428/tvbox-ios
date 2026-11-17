@@ -23,7 +23,7 @@ struct HomeView: View {
                 VStack(spacing: 0) {
                     topBar
                     catBar
-                    body
+                    listArea
                 }
             }
             .navigationBarHidden(true)
@@ -91,7 +91,7 @@ struct HomeView: View {
         }
     }
 
-    @ViewBuilder private var body: some View {
+    @ViewBuilder private var listArea: some View {
         if store.macSites.isEmpty {
             EmptyBox(icon: "antenna.radiowaves.left.and.right",
                      title: "还没有配置源",
